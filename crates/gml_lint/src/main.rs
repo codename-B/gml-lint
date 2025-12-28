@@ -22,6 +22,7 @@ use rustc_hash::FxHashSet;
 struct ProjectSymbolProvider {
     functions: FxHashSet<String>,
     variables: FxHashSet<String>,
+    globals: FxHashSet<String>,
 }
 
 impl ProjectSymbolProvider {
@@ -29,6 +30,7 @@ impl ProjectSymbolProvider {
         Self { 
             functions: FxHashSet::default(),
             variables: FxHashSet::default(),
+            globals: FxHashSet::default(),
         }
     }
 }
@@ -40,6 +42,10 @@ impl gml_linter::SymbolProvider for ProjectSymbolProvider {
 
     fn has_variable(&self, name: &str) -> bool {
         self.variables.contains(name)
+    }
+
+    fn has_global(&self, name: &str) -> bool {
+        self.globals.contains(name)
     }
 }
 
@@ -187,14 +193,15 @@ fn run_lint(args: LintArgs) -> Result<()> {
     let read_start = Instant::now();
 
     // Read all file contents AND extract symbols in a single parallel pass
-    let file_data: Vec<(PathBuf, String, FxHashSet<String>, FxHashSet<String>)> = files
+    let file_data: Vec<(PathBuf, String, FxHashSet<String>, FxHashSet<String>, FxHashSet<String>)> = files
         .par_iter()
         .filter_map(|path| {
             std::fs::read_to_string(path).ok().map(|content| {
                 let mut functions = FxHashSet::default();
                 let mut variables = FxHashSet::default();
-                extract_symbols(&content, &mut functions, &mut variables);
-                (path.clone(), content, functions, variables)
+                let mut globals = FxHashSet::default();
+                extract_symbols(&content, &mut functions, &mut variables, &mut globals);
+                (path.clone(), content, functions, variables, globals)
             })
         })
         .collect();
@@ -230,7 +237,7 @@ fn run_lint(args: LintArgs) -> Result<()> {
 
     let all_diagnostics: Vec<(PathBuf, Vec<Diagnostic>)> = file_data
         .par_iter()
-        .filter_map(|(path, content, _functions, _variables)| {
+        .filter_map(|(path, content, _functions, _variables, _globals)| {
 
             // Check cache - skip if file unchanged
             if !args.no_cache {
@@ -451,7 +458,7 @@ fn collect_gml_files(paths: &[PathBuf], exclude_patterns: Option<&[String]>) -> 
 /// Build a symbol provider by merging pre-extracted symbols from all files
 fn build_symbol_provider_from_extracted(
     project_root: &Path, 
-    file_data: &[(PathBuf, String, FxHashSet<String>, FxHashSet<String>)],
+    file_data: &[(PathBuf, String, FxHashSet<String>, FxHashSet<String>, FxHashSet<String>)],
     cache: &Mutex<Cache>,
 ) -> ProjectSymbolProvider {
     let mut provider = ProjectSymbolProvider::new();
@@ -475,16 +482,17 @@ fn build_symbol_provider_from_extracted(
     }
     
     // 2. Merge pre-extracted symbols from all files
-    for (_path, _content, functions, variables) in file_data {
+    for (_path, _content, functions, variables, globals) in file_data {
         provider.functions.extend(functions.iter().cloned());
         provider.variables.extend(variables.iter().cloned());
+        provider.globals.extend(globals.iter().cloned());
     }
     
     provider
 }
 
 /// Extract function names and macro names from GML source using the lexer
-fn extract_symbols(source: &str, functions: &mut FxHashSet<String>, variables: &mut FxHashSet<String>) {
+fn extract_symbols(source: &str, functions: &mut FxHashSet<String>, variables: &mut FxHashSet<String>, globals: &mut FxHashSet<String>) {
     let mut lexer = Lexer::new(source);
     let mut tokens = Vec::new();
     loop {
@@ -509,7 +517,7 @@ fn extract_symbols(source: &str, functions: &mut FxHashSet<String>, variables: &
             TokenKind::Macro(name, body) => {
                 functions.insert(name.to_string());
                 if let Some(content) = body {
-                    extract_symbols(content, functions, variables);
+                    extract_symbols(content, functions, variables, globals);
                 }
             }
             TokenKind::Enum => {
@@ -518,6 +526,21 @@ fn extract_symbols(source: &str, functions: &mut FxHashSet<String>, variables: &
                      if let TokenKind::Identifier(name) = &tokens[i + 1].kind {
                          variables.insert(name.to_string());
                      }
+                }
+            }
+            TokenKind::Globalvar => {
+                // globalvar name1, name2, ...;
+                let mut j = i + 1;
+                while j < tokens.len() {
+                    if let TokenKind::Identifier(name) = &tokens[j].kind {
+                        globals.insert(name.to_string());
+                        j += 1;
+                        if j < tokens.len() && matches!(tokens[j].kind, TokenKind::Comma) {
+                            j += 1;
+                            continue;
+                        }
+                    }
+                    break;
                 }
             }
             TokenKind::Var | TokenKind::Static => {
@@ -556,6 +579,24 @@ fn extract_symbols(source: &str, functions: &mut FxHashSet<String>, variables: &
                         functions.insert(name.to_string());
                     } else {
                         variables.insert(name.to_string());
+                    }
+                }
+
+                // global.name = ... (track global assignments)
+                if *name == "global" && i + 2 < tokens.len() && matches!(tokens[i + 1].kind, TokenKind::Dot) {
+                    if let TokenKind::Identifier(member) = &tokens[i + 2].kind {
+                        // Check for any assignment operator
+                        if i + 3 < tokens.len() {
+                            let is_assign = matches!(tokens[i + 3].kind, 
+                                TokenKind::Assign | TokenKind::PlusAssign | TokenKind::MinusAssign |
+                                TokenKind::StarAssign | TokenKind::SlashAssign | TokenKind::PercentAssign |
+                                TokenKind::BitAndAssign | TokenKind::BitOrAssign | TokenKind::BitXorAssign |
+                                TokenKind::NullCoalesceAssign
+                            );
+                            if is_assign {
+                                globals.insert(member.to_string());
+                            }
+                        }
                     }
                 }
 

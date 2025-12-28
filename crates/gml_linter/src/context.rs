@@ -7,12 +7,15 @@ use gml_parser::Program;
 pub trait SymbolProvider {
     fn has_function(&self, name: &str) -> bool;
     fn has_variable(&self, name: &str) -> bool;
+    /// Check if a global variable has been assigned anywhere in the project
+    fn has_global(&self, name: &str) -> bool;
 }
 
 pub struct DefaultSymbolProvider;
 impl SymbolProvider for DefaultSymbolProvider {
     fn has_function(&self, _name: &str) -> bool { false }
     fn has_variable(&self, _name: &str) -> bool { false }
+    fn has_global(&self, _name: &str) -> bool { true } // Default: assume globals exist
 }
 
 /// Context provided to rules during linting

@@ -18,6 +18,8 @@ mod gml017_018_constructors;
 mod gml020_type_mismatch;
 mod gml021_invalid_assignment;
 mod gml022_unknown_identifier;
+mod gml023_uninitialized_global;
+mod gml024_simplify_undefined_check;
 
 use crate::Rule;
 
@@ -38,6 +40,8 @@ pub use gml017_018_constructors::ConstructorValidation;
 pub use gml020_type_mismatch::TypeMismatch;
 pub use gml021_invalid_assignment::InvalidAssignment;
 pub use gml022_unknown_identifier::UnknownIdentifier;
+pub use gml023_uninitialized_global::UninitializedGlobal;
+pub use gml024_simplify_undefined_check::SimplifyUndefinedCheck;
 
 /// Get all built-in rules
 /// Note: GML003 (UnusedVariable) is handled by semantic rules in lib.rs, not here
@@ -60,5 +64,7 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(TypeMismatch),
         Box::new(InvalidAssignment),
         Box::new(UnknownIdentifier),
+        Box::new(UninitializedGlobal),
+        Box::new(SimplifyUndefinedCheck),
     ]
 }
