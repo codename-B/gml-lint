@@ -1,0 +1,49 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/gml_lint",
+    "crates/gml_linter",
+    "crates/gml_parser",
+    "crates/gml_lexer",
+    "crates/gml_diagnostics",
+    "crates/gml_cache",
+    "crates/gml_project",
+    "crates/gml_semantic",
+]
+
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["gml-lint contributors"]
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Shared dependencies across crates
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+thiserror = "1.0"
+anyhow = "1.0"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+colored = "2.0"
+
+# Performance
+rayon = "1.8"
+dashmap = "5.5"
+ahash = { version = "0.8", features = ["serde"] }
+smallvec = "1.11"
+rustc-hash = "1.1"
+
+# Testing
+pretty_assertions = "1.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+opt-level = 3

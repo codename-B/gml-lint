@@ -1,0 +1,11 @@
+[package]
+name = "gml_parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+gml_lexer = { path = "../gml_lexer" }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
