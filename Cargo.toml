@@ -3,12 +3,6 @@ resolver = "2"
 members = [
     "crates/gml_lint",
     "crates/gml_linter",
-    "crates/gml_parser",
-    "crates/gml_lexer",
-    "crates/gml_diagnostics",
-    "crates/gml_cache",
-    "crates/gml_project",
-    "crates/gml_semantic",
 ]
 
 
@@ -23,20 +17,20 @@ rust-version = "1.75"
 # Shared dependencies across crates
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.8"
-thiserror = "1.0"
+toml = "0.9"
+thiserror = "2.0"
 anyhow = "1.0"
 
 # CLI
-clap = { version = "4.4", features = ["derive"] }
-colored = "2.0"
+clap = { version = "4.5", features = ["derive"] }
+colored = "3.0"
 
 # Performance
-rayon = "1.8"
-dashmap = "5.5"
+rayon = "1.11"
+dashmap = "6.1"
 ahash = { version = "0.8", features = ["serde"] }
-smallvec = "1.11"
-rustc-hash = "1.1"
+smallvec = "1.15"
+rustc-hash = "2.1"
 
 # Testing
 pretty_assertions = "1.4"

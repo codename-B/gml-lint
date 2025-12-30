@@ -1,5 +1,5 @@
 use rustc_hash::FxHashMap;
-use crate::types::Type;
+use super::types::Type;
 use std::rc::Rc;
 
 /// Tracks variable types within a scope (function or block).

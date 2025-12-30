@@ -2,8 +2,8 @@
 //!
 //! Validates that function calls match the number of parameters in their declarations.
 
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::Expr;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::Expr;
 
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
@@ -26,7 +26,7 @@ impl Rule for CheckArgumentCounts {
         "Checks that function calls have the correct number of arguments."
     }
 
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         let (callee, args, span) = match expr {
             Expr::Call { callee, args, span } => (callee, args, span),
             Expr::New { callee, args, span } => (callee, args, span),

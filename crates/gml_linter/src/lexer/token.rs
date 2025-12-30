@@ -34,19 +34,26 @@ impl<'a> Token<'a> {
     }
 }
 
+/// Macro definition content
+#[derive(Debug, Clone, PartialEq)]
+pub struct MacroDefinition<'a> {
+    pub name: &'a str,
+    pub body: Option<&'a str>,
+}
+
 /// All possible token types in GML (aligned with GMEdit's GmlLinterKind)
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind<'a> {
     // Literals
     Integer(i64),
     Float(f64),
-    String(&'a str),
+    String, // Unit variant - use span to get text
     True,
     False,
     Undefined,
 
     // Identifiers and Keywords
-    Identifier(&'a str),
+    Identifier, // Unit variant - use span to get text
 
     // Keywords
     If,
@@ -165,19 +172,19 @@ pub enum TokenKind<'a> {
     StructAccessor, // [$  (struct accessor)
 
     // Comments (we track these for potential doc extraction)
-    LineComment(&'a str),
-    BlockComment(&'a str),
-    DocComment(&'a str),     // /// style
+    LineComment,  // Unit variant - use span
+    BlockComment, // Unit variant - use span
+    DocComment,   // Unit variant - use span
 
     // Preprocessor
-    Macro(&'a str, Option<&'a str>),     // #macro <name> [value]
-    Region(&'a str),    // #region <name>
+    Macro(Box<MacroDefinition<'a>>),     // #macro <name> [value]
+    Region,             // #region <name> - use span
     EndRegion,          // #endregion
-    Define(&'a str),    // #define <name>
+    Define,             // #define <name> - use span
 
     // Special
     Eof,
-    Error(String), // Errors still use String as they might be formatted
+    Error(Box<String>), // Box<String> is 8 bytes, whereas Box<str> is 16 bytes
     Newline,
 }
 
@@ -223,7 +230,7 @@ impl<'a> TokenKind<'a> {
             self,
             TokenKind::Integer(_)
                 | TokenKind::Float(_)
-                | TokenKind::String(_)
+                | TokenKind::String
                 | TokenKind::True
                 | TokenKind::False
                 | TokenKind::Undefined

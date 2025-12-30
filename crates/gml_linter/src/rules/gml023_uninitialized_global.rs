@@ -1,5 +1,5 @@
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::Expr;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::Expr;
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
 pub struct UninitializedGlobal;
@@ -21,7 +21,7 @@ impl Rule for UninitializedGlobal {
         "Global variable read but never assigned anywhere in project"
     }
 
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _type_env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _type_env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         // We are looking for global.variable reads
         let Expr::Member { object, field, span } = expr else {
             return;

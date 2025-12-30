@@ -1,7 +1,7 @@
-use crate::db::Db;
-use crate::types::Type;
-use crate::scope::TypeEnv;
-use gml_parser::{Expr, Literal, BinaryOp, UnaryOp};
+use super::db::Db;
+use super::types::Type;
+use super::scope::TypeEnv;
+use crate::parser::{Expr, Literal, BinaryOp, UnaryOp};
 
 #[allow(clippy::only_used_in_recursion)]
 pub fn infer_expression(db: &dyn Db, env: &TypeEnv, expr: &Expr) -> Type {

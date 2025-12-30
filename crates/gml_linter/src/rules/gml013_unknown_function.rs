@@ -1,5 +1,5 @@
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::Expr;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::Expr;
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 use crate::builtins::get_builtins;
 
@@ -22,7 +22,7 @@ impl Rule for UnknownFunction {
         "Function or variable reference is not defined."
     }
 
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         if let Expr::Call { callee, .. } = expr {
             if let Expr::Identifier { name, span } = &**callee {
                 // Check if built-in
@@ -69,6 +69,7 @@ mod tests {
             self.functions.iter().any(|f| f == name)
         }
         fn has_variable(&self, _name: &str) -> bool { false }
+        fn has_global(&self, _name: &str) -> bool { false }
     }
 
     #[test]

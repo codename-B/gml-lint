@@ -9,7 +9,7 @@
 //! - Pre-allocates vectors with estimated capacity
 //! - Uses SmallVec for scope bindings (typically small number per scope)
 
-use gml_lexer::Span;
+use crate::lexer::Span;
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 

@@ -1,9 +1,9 @@
-use gml_parser::{Expr, AssignOp};
-use gml_semantic::{types::Type, infer, Db};
+use crate::parser::{Expr, AssignOp};
+use crate::semantic::{types::Type, infer, Db};
 use crate::{LintContext, Rule, RuleCode};
-use gml_diagnostics::{Category, Diagnostic, Location};
-use crate::semantic::SemanticModel;
-use gml_semantic::scope::TypeEnv;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::semantic_model::SemanticModel;
+use crate::semantic::scope::TypeEnv;
 
 pub struct InvalidAssignment;
 

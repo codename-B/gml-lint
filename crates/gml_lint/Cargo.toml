@@ -10,17 +10,14 @@ path = "src/main.rs"
 
 [dependencies]
 gml_linter = { path = "../gml_linter" }
-gml_lexer = { path = "../gml_lexer" }
-gml_cache = { path = "../gml_cache" }
-gml_diagnostics = { path = "../gml_diagnostics" }
-gml_project = { path = "../gml_project" }
-
 
 clap.workspace = true
 colored.workspace = true
 rayon.workspace = true
 anyhow.workspace = true
-rustc-hash = "2.0"
+rustc-hash = "2.1"
 jwalk = "0.8"
 ignore = "0.4"
 crossbeam = "0.8"
+memmap2 = "0.9"
+dashmap.workspace = true

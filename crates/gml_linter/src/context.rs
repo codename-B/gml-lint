@@ -1,7 +1,7 @@
 //! Lint context - provides information to rules during checking
 
-use gml_diagnostics::Diagnostic;
-use gml_parser::Program;
+use crate::diagnostics::Diagnostic;
+use crate::parser::Program;
 
 /// Trait for providing project-wide symbol information
 pub trait SymbolProvider {
@@ -34,12 +34,12 @@ pub struct LintContext<'a> {
     /// Symbol provider (project context)
     symbol_provider: &'a dyn SymbolProvider,
     /// Semantic database (type inference)
-    db: &'a gml_semantic::db::Database,
+    db: &'a crate::semantic::db::Database,
 }
 
 impl<'a> LintContext<'a> {
     /// Create a new lint context
-    pub fn new(source: &'a str, file_path: &'a str, program: &'a Program<'a>, symbol_provider: &'a dyn SymbolProvider, db: &'a gml_semantic::db::Database) -> Self {
+    pub fn new(source: &'a str, file_path: &'a str, program: &'a Program<'a>, symbol_provider: &'a dyn SymbolProvider, db: &'a crate::semantic::db::Database) -> Self {
 
         // Pre-compute line starts for offset -> line/column conversion
         // Estimate: ~40 chars per line on average
@@ -84,7 +84,7 @@ impl<'a> LintContext<'a> {
     }
 
     /// Get the semantic database
-    pub fn db(&self) -> &gml_semantic::db::Database {
+    pub fn db(&self) -> &crate::semantic::db::Database {
         self.db
     }
 

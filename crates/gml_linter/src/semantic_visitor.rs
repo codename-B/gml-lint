@@ -3,13 +3,13 @@
 //! This visitor collects bindings (declarations) and references (usages) during
 //! a single pass through the AST, building a SemanticModel that rules can query.
 
-use gml_lexer::Span;
-use gml_parser::{Expr, Stmt};
+use crate::lexer::Span;
+use crate::parser::{Expr, Stmt};
 
-use crate::semantic::{BindingKind, ScopeKind, SemanticModel};
+use crate::semantic_model::{BindingKind, ScopeKind, SemanticModel};
 
 /// Build a SemanticModel from a program by traversing the AST once
-pub fn build_semantic_model(program: &gml_parser::Program) -> SemanticModel {
+pub fn build_semantic_model(program: &crate::parser::Program) -> SemanticModel {
     let mut model = SemanticModel::new();
     
     for stmt in &program.statements {

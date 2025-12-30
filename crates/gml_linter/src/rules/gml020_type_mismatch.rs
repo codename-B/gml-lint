@@ -1,10 +1,10 @@
 use crate::rule::{Rule, RuleCode};
 use crate::context::LintContext;
-use crate::semantic::SemanticModel;
-use gml_parser::{Expr, BinaryOp};
-use gml_diagnostics::{Diagnostic, Location, Category};
-use gml_semantic::types::Type;
-use gml_semantic::infer::infer_expression;
+use crate::semantic_model::SemanticModel;
+use crate::parser::{Expr, BinaryOp};
+use crate::diagnostics::{Diagnostic, Location, Category};
+use crate::semantic::types::Type;
+use crate::semantic::infer::infer_expression;
 
 pub struct TypeMismatch;
 
@@ -25,7 +25,7 @@ impl Rule for TypeMismatch {
         "Checks for type mismatches in binary operations."
     }
 
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         if let Expr::Binary { left, op, right, span } = expr {
              let left_ty = infer_expression(ctx.db(), env, left);
              let right_ty = infer_expression(ctx.db(), env, right);

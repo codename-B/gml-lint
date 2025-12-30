@@ -1,4 +1,4 @@
-use crate::db::TypeId;
+use super::db::TypeId;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {

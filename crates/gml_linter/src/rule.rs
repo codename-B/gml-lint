@@ -1,7 +1,7 @@
 //! Rule trait and utilities
 
-use gml_diagnostics::{Category, Diagnostic};
-use gml_parser::{Expr, Stmt};
+use crate::diagnostics::{Category, Diagnostic};
+use crate::parser::{Expr, Stmt};
 use crate::{LintContext, SemanticModel};
 
 /// A rule code identifier
@@ -44,14 +44,14 @@ pub trait Rule: Send + Sync {
     /// This is called once per statement in the AST.
     /// Override this for statement-level rules.
     #[allow(unused_variables)]
-    fn check_stmt<'a>(&self, _ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, _stmt: &Stmt<'a>, _diagnostics: &mut Vec<Diagnostic>) {}
+    fn check_stmt<'a>(&self, _ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, _stmt: &Stmt<'a>, _diagnostics: &mut Vec<Diagnostic>) {}
 
     
     /// Check a single expression during single-pass traversal.
     /// This is called once per expression in the AST.
     /// Override this for expression-level rules.
     #[allow(unused_variables)]
-    fn check_expr<'a>(&self, _ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, _expr: &Expr<'a>, _diagnostics: &mut Vec<Diagnostic>) {}
+    fn check_expr<'a>(&self, _ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, _expr: &Expr<'a>, _diagnostics: &mut Vec<Diagnostic>) {}
 
     /// Run post-processing rules after the full AST traversal and semantic model building.
     #[allow(unused_variables)]

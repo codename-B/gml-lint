@@ -3,8 +3,8 @@
 //! Instead of each rule traversing the AST separately, we traverse once
 //! and call all rules at each node. This is the key optimization from ruff.
 
-use gml_diagnostics::Diagnostic;
-use gml_parser::{Expr, Stmt};
+use crate::diagnostics::Diagnostic;
+use crate::parser::{Expr, Stmt};
 use crate::{LintContext, Rule};
 
 /// Visit the entire program with all rules in a single pass

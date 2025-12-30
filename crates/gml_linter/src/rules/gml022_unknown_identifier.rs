@@ -1,5 +1,5 @@
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::Expr;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::Expr;
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 use crate::builtins::get_builtins;
 
@@ -22,7 +22,7 @@ impl Rule for UnknownIdentifier {
         "Identifier is not defined."
     }
 
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         if let Expr::Identifier { name, span } = expr {
             // IGNORE function calls - those are handled by GML013 UnknownFunction
             if get_builtins().contains(name) {
@@ -70,6 +70,7 @@ mod tests {
     impl SymbolProvider for MockSymbolProvider {
         fn has_function(&self, _name: &str) -> bool { false }
         fn has_variable(&self, name: &str) -> bool { self.vars.iter().any(|s| s == name) }
+        fn has_global(&self, _name: &str) -> bool { false }
     }
 
     #[test]

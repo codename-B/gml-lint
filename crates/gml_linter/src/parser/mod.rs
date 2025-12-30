@@ -3,7 +3,7 @@
 //! A hand-written recursive descent parser that produces an AST from tokens.
 
 mod ast;
-mod parser;
+mod parse;
 
 pub use ast::*;
-pub use parser::Parser;
+pub use parse::Parser;

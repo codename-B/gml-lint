@@ -4,8 +4,8 @@
 //!
 //! This rule uses the single-pass visitor pattern for efficient checking.
 
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::{Expr, Stmt};
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::{Expr, Stmt};
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 use crate::keywords;
 
@@ -31,7 +31,7 @@ impl Rule for ReadonlyAssignment {
 
     // Note: check() is not overridden - we use check_stmt()/check_expr() for single-pass traversal
     
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
 
         if let Stmt::VarDecl { declarations, .. } = stmt {
             for decl in declarations {
@@ -48,9 +48,9 @@ impl Rule for ReadonlyAssignment {
         }
     }
     
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
 
-        use gml_parser::Literal;
+        use crate::parser::Literal;
 
         if let Expr::Assignment { target, span, .. } = expr {
             match target.as_ref() {

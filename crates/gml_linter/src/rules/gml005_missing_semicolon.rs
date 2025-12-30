@@ -4,8 +4,8 @@
 //! 
 //! This rule uses the single-pass visitor pattern for efficient checking.
 
-use gml_diagnostics::{Category, Diagnostic, Edit, Fix, Location};
-use gml_parser::Stmt;
+use crate::diagnostics::{Category, Diagnostic, Edit, Fix, Location};
+use crate::parser::Stmt;
 
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
@@ -30,7 +30,7 @@ impl Rule for MissingSemicolon {
 
     // Note: check() is not overridden - we use check_stmt() for single-pass traversal
     
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
 
         let source = ctx.source();
         
@@ -63,7 +63,7 @@ fn check_semicolon<'a>(
     ctx: &LintContext<'a>,
 
     source: &str,
-    span: gml_lexer::Span,
+    span: crate::lexer::Span,
     message: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {

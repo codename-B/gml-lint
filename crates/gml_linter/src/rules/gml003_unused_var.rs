@@ -2,7 +2,7 @@
 //!
 //! Detects variables that are declared but never used.
 
-use gml_diagnostics::{Category, Diagnostic, Edit, Fix, Location};
+use crate::diagnostics::{Category, Diagnostic, Edit, Fix, Location};
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
 

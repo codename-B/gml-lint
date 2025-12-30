@@ -2,7 +2,44 @@
 //!
 //! A hand-written lexer for GML, optimized for speed similar to Ruff's approach.
 
-use crate::token::{Span, Token, TokenKind};
+use super::token::{MacroDefinition, Span, Token, TokenKind};
+use memchr::{memchr, memchr2, memchr3};
+
+// Lookup tables for fast character classification
+const WHITESPACE: [bool; 256] = {
+    let mut table = [false; 256];
+    table[b' ' as usize] = true;
+    table[b'\t' as usize] = true;
+    table[b'\r' as usize] = true;
+    table[b'\n' as usize] = true;
+    table
+};
+
+const IDENT_START: [bool; 256] = {
+    let mut table = [false; 256];
+    let mut i = 0u8;
+    loop {
+        if (i >= b'a' && i <= b'z') || (i >= b'A' && i <= b'Z') || i == b'_' {
+            table[i as usize] = true;
+        }
+        if i == 255 { break; }
+        i += 1;
+    }
+    table
+};
+
+const IDENT_CONTINUE: [bool; 256] = {
+    let mut table = [false; 256];
+    let mut i = 0u8;
+    loop {
+        if (i >= b'a' && i <= b'z') || (i >= b'A' && i <= b'Z') || (i >= b'0' && i <= b'9') || i == b'_' {
+            table[i as usize] = true;
+        }
+        if i == 255 { break; }
+        i += 1;
+    }
+    table
+};
 
 /// The GML lexer
 pub struct Lexer<'a> {
@@ -29,8 +66,10 @@ impl<'a> Lexer<'a> {
 
     /// Tokenize the entire source, returning all tokens
     pub fn tokenize(mut self) -> Vec<Token<'a>> {
-        // Pre-allocate based on estimate: ~1 token per 5 characters on average
-        let mut tokens = Vec::with_capacity(self.source.len() / 5);
+        // Pre-allocate based on estimate: ~1 token per 3 characters on average.
+        // GML code tends to be token-dense (identifiers, operators).
+        // A capacity of len/5 underestimates and causes reallocations.
+        let mut tokens = Vec::with_capacity(self.source.len() / 3);
         loop {
             let token = self.next_token();
             let is_eof = matches!(token.kind, TokenKind::Eof);
@@ -65,7 +104,15 @@ impl<'a> Lexer<'a> {
             b',' => self.make_token(TokenKind::Comma),
             b';' => self.make_token(TokenKind::Semicolon),
             b'~' => self.make_token(TokenKind::BitNot),
-            b'@' => self.make_token(TokenKind::At),
+            b'@' => {
+                // Check for verbatim string @"..."
+                if self.check(b'"') {
+                    self.advance();
+                    self.verbatim_string()
+                } else {
+                    self.make_token(TokenKind::At)
+                }
+            }
 
             // Dot (could be .. for ranges)
             b'.' => {
@@ -245,7 +292,11 @@ impl<'a> Lexer<'a> {
 
             // Hex numbers and $ accessor
             b'$' => {
-                if self.peek().is_some_and(|c| c.is_ascii_hexdigit()) {
+                if self.check(b'"') {
+                    // Template string $"..."
+                    self.advance();
+                    self.template_string()
+                } else if self.peek().is_some_and(|c| c.is_ascii_hexdigit()) {
                     self.hex_number()
                 } else {
                     self.make_token(TokenKind::Dollar)
@@ -280,48 +331,56 @@ impl<'a> Lexer<'a> {
             }
 
             // Unknown character
-            _ => self.make_token(TokenKind::Error(format!(
+            _ => self.make_token(TokenKind::Error(Box::new(format!(
                 "Unexpected character: '{}'",
                 c as char
-            ))),
+            )))),
         }
     }
 
     // ========== Helper methods ==========
 
+    #[inline]
     fn is_at_end(&self) -> bool {
         self.pos >= self.bytes.len()
     }
 
+    #[inline]
     fn peek(&self) -> Option<u8> {
         self.bytes.get(self.pos).copied()
     }
 
+    #[inline]
     fn peek_next(&self) -> Option<u8> {
         self.bytes.get(self.pos + 1).copied()
     }
 
+    #[inline]
     fn advance(&mut self) -> u8 {
         let c = self.bytes[self.pos];
         self.pos += 1;
         c
     }
 
+    #[inline]
     fn check(&self, expected: u8) -> bool {
         self.peek() == Some(expected)
     }
 
+    #[inline]
     fn skip_whitespace(&mut self) {
-        while let Some(c) = self.peek() {
-            match c {
-                b' ' | b'\t' | b'\r' | b'\n' => {
-                    self.advance();
-                }
-                _ => break,
-            }
+        let remaining = &self.bytes[self.pos..];
+        if let Some(pos) = remaining
+            .iter()
+            .position(|&b| !WHITESPACE[b as usize])
+        {
+            self.pos += pos;
+        } else {
+            self.pos += remaining.len();
         }
     }
 
+    #[inline]
     fn make_token(&self, kind: TokenKind<'a>) -> Token<'a> {
         Token::new(
             kind,
@@ -384,15 +443,15 @@ impl<'a> Lexer<'a> {
     }
 
     fn line_comment(&mut self) -> Token<'a> {
-        let start = self.pos;
-        while let Some(c) = self.peek() {
-            if c == b'\n' {
-                break;
-            }
-            self.advance();
+        // let start = self.pos;
+        // Optimized: find next newline using SIMD
+        if let Some(pos) = memchr(b'\n', &self.bytes[self.pos..]) {
+            self.pos += pos;
+        } else {
+            self.pos = self.bytes.len();
         }
-        let content = &self.source[start..self.pos];
-        self.make_token(TokenKind::LineComment(content))
+        // let content = &self.source[start..self.pos];
+        self.make_token(TokenKind::LineComment)
     }
 
     fn doc_comment(&mut self) -> Token<'a> {
@@ -400,79 +459,175 @@ impl<'a> Lexer<'a> {
         if self.check(b' ') {
             self.advance();
         }
-        let start = self.pos;
-        while let Some(c) = self.peek() {
-            if c == b'\n' {
-                break;
-            }
-            self.advance();
+        // let start = self.pos;
+        // Optimized: find next newline using SIMD
+        if let Some(pos) = memchr(b'\n', &self.bytes[self.pos..]) {
+            self.pos += pos;
+        } else {
+            self.pos = self.bytes.len();
         }
-        let content = &self.source[start..self.pos];
-        self.make_token(TokenKind::DocComment(content))
+        // let content = &self.source[start..self.pos];
+        self.make_token(TokenKind::DocComment)
     }
 
     fn block_comment(&mut self) -> Token<'a> {
-        let start = self.pos;
+        // let start = self.pos;
         let mut depth = 1;
         
-        while depth > 0 && !self.is_at_end() {
-            if self.check(b'/') && self.peek_next() == Some(b'*') {
-                self.advance();
-                self.advance();
-                depth += 1;
-            } else if self.check(b'*') && self.peek_next() == Some(b'/') {
-                self.advance();
-                self.advance();
-                depth -= 1;
-            } else {
-                self.advance();
-            }
+        while depth > 0 {
+             let remaining = &self.bytes[self.pos..];
+             match memchr2(b'/', b'*', remaining) {
+                 Some(offset) => {
+                     self.pos += offset;
+                     // We are at '/' or '*'
+                     if self.check(b'/') && self.peek_next() == Some(b'*') {
+                         self.advance();
+                         self.advance();
+                         depth += 1;
+                     } else if self.check(b'*') && self.peek_next() == Some(b'/') {
+                         self.advance();
+                         self.advance();
+                         depth -= 1;
+                     } else {
+                         self.advance(); // It was a lone / or *
+                     }
+                 }
+                 None => {
+                     self.pos = self.bytes.len();
+                     break;
+                 }
+             }
         }
 
         if depth > 0 {
-            return self.make_token(TokenKind::Error("Unterminated block comment".to_string()));
+            return self.make_token(TokenKind::Error(Box::new("Unterminated block comment".into())));
         }
 
-        let content = &self.source[start..self.pos - 2];
-        self.make_token(TokenKind::BlockComment(content))
+        // let content = &self.source[start..self.pos - 2];
+        self.make_token(TokenKind::BlockComment)
     }
 
     fn string(&mut self) -> Token<'a> {
         // Zero-allocation string: just return the slice of the source including quotes
         // The consumer/parser will unescape if needed.
-        while let Some(c) = self.peek() {
-            if c == b'"' {
-                self.advance();
-                return self.make_token(TokenKind::String(self.current_lexeme()));
-            }
-            if c == b'\\' {
-                self.advance();
-                if self.peek().is_some() {
-                    self.advance();
+        loop {
+            let remaining = &self.bytes[self.pos..];
+            // Fast scan for " (end), \ (escape), or \n (error)
+            match memchr3(b'"', b'\\', b'\n', remaining) {
+                Some(offset) => {
+                    self.pos += offset;
+                    let c = self.bytes[self.pos];
+
+                    if c == b'"' {
+                        self.pos += 1; // Consume closing quote
+                        return self.make_token(TokenKind::String);
+                    } else if c == b'\\' {
+                        self.pos += 1; // Consume backslash
+                        // Skip next char if possible (escape)
+                        if self.pos < self.bytes.len() {
+                            self.pos += 1;
+                        }
+                    } else {
+                        // c == b'\n'
+                        // Do NOT consume the newline, so the main loop handles it (e.g. for line counting)
+                        return self.make_token(TokenKind::Error(Box::new("Unterminated string".into())));
+                    }
                 }
-            } else if c == b'\n' {
-                return self.make_token(TokenKind::Error("Unterminated string".to_string()));
-            } else {
-                self.advance();
+                None => {
+                    // Reached EOF
+                    self.pos = self.bytes.len();
+                    return self.make_token(TokenKind::Error(Box::new("Unterminated string".into())));
+                }
             }
         }
-
-        self.make_token(TokenKind::Error("Unterminated string".to_string()))
     }
 
     fn string_single(&mut self) -> Token<'a> {
-        while let Some(c) = self.peek() {
-            if c == b'\'' {
-                self.advance();
-                return self.make_token(TokenKind::String(self.current_lexeme()));
-            }
-            if c == b'\n' {
-                return self.make_token(TokenKind::Error("Unterminated string".to_string()));
-            }
-            self.advance();
-        }
+        let remaining = &self.bytes[self.pos..];
+        // Fast scan for ' (end) or \n (error)
+        match memchr2(b'\'', b'\n', remaining) {
+            Some(offset) => {
+                self.pos += offset;
+                let c = self.bytes[self.pos];
 
-        self.make_token(TokenKind::Error("Unterminated string".to_string()))
+                if c == b'\'' {
+                    self.pos += 1; // Consume closing quote
+                    self.make_token(TokenKind::String)
+                } else {
+                    // c == b'\n'
+                    // Do NOT consume the newline
+                    self.make_token(TokenKind::Error(Box::new("Unterminated string".into())))
+                }
+            }
+            None => {
+                self.pos = self.bytes.len();
+                self.make_token(TokenKind::Error(Box::new("Unterminated string".into())))
+            }
+        }
+    }
+
+    /// Template string $"..." - supports interpolation and escape sequences
+    /// The $" has already been consumed when this is called
+    fn template_string(&mut self) -> Token<'a> {
+        // Template strings work like regular strings but with interpolation
+        // For lexing purposes, we treat them the same as regular strings
+        loop {
+            let remaining = &self.bytes[self.pos..];
+            // Fast scan for " (end), \ (escape), or \n (error)
+            match memchr3(b'"', b'\\', b'\n', remaining) {
+                Some(offset) => {
+                    self.pos += offset;
+                    let c = self.bytes[self.pos];
+
+                    if c == b'"' {
+                        self.pos += 1; // Consume closing quote
+                        return self.make_token(TokenKind::String);
+                    } else if c == b'\\' {
+                        self.pos += 1; // Consume backslash
+                        // Skip next char if possible (escape)
+                        if self.pos < self.bytes.len() {
+                            self.pos += 1;
+                        }
+                    } else {
+                        // c == b'\n'
+                        // Do NOT consume the newline
+                        return self.make_token(TokenKind::Error(Box::new("Unterminated template string".into())));
+                    }
+                }
+                None => {
+                    // Reached EOF
+                    self.pos = self.bytes.len();
+                    return self.make_token(TokenKind::Error(Box::new("Unterminated template string".into())));
+                }
+            }
+        }
+    }
+
+    /// Verbatim string @"..." - multi-line, no escape sequences except "" for quote
+    /// The @" has already been consumed when this is called
+    fn verbatim_string(&mut self) -> Token<'a> {
+        // Verbatim strings can span multiple lines and only escape quotes by doubling ("")
+        loop {
+            let remaining = &self.bytes[self.pos..];
+            // Fast scan for " (potential end)
+            match memchr(b'"', remaining) {
+                Some(offset) => {
+                    self.pos += offset + 1; // Move past the quote
+                    // Check if it's an escaped quote ("")
+                    if self.check(b'"') {
+                        self.advance(); // Consume the second quote, continue scanning
+                    } else {
+                        // End of string
+                        return self.make_token(TokenKind::String);
+                    }
+                }
+                None => {
+                    // Reached EOF without closing quote
+                    self.pos = self.bytes.len();
+                    return self.make_token(TokenKind::Error(Box::new("Unterminated verbatim string".into())));
+                }
+            }
+        }
     }
 
     fn number(&mut self) -> Token<'a> {
@@ -489,97 +644,207 @@ impl<'a> Lexer<'a> {
             return self.binary_number();
         }
         
-        // Consume integer part
-        while let Some(c) = self.peek() {
-            if c.is_ascii_digit() {
-                self.advance();
-            } else {
-                break;
-            }
-        }
+        // Accumulate integer part
+        let mut value: i64 = (first_digit - b'0') as i64;
+        let mut overflow = false;
 
-        // Check for decimal
-        if self.check(b'.') && self.peek_next().is_some_and(|c| c.is_ascii_digit()) {
-            self.advance(); // consume '.'
-            while let Some(c) = self.peek() {
-                if c.is_ascii_digit() {
-                    self.advance();
+        // Optimized: Use iterator to avoid bounds checks
+        let remaining = &self.bytes[self.pos..];
+        for (i, &c) in remaining.iter().enumerate() {
+            if !c.is_ascii_digit() {
+                self.pos += i;
+                // Check for decimal
+                if c == b'.' {
+                    // We need to check if next char is digit, but we are inside loop
+                    // self.pos is now at '.'
+                    if self.peek_next().is_some_and(|nc| nc.is_ascii_digit()) {
+                         self.advance(); // consume '.'
+                         // Consume decimal part
+                         let decimal_remaining = &self.bytes[self.pos..];
+                         if let Some(len) = decimal_remaining.iter().position(|&dc| !dc.is_ascii_digit()) {
+                             self.pos += len;
+                         } else {
+                             self.pos += decimal_remaining.len();
+                         }
+
+                         // Parse as float
+                         let value: f64 = self.current_lexeme().parse().unwrap_or(0.0);
+                         return self.make_token(TokenKind::Float(value));
+                    }
+                }
+
+                // End of number
+                if overflow {
+                    return self.make_token(TokenKind::Integer(0));
                 } else {
-                    break;
+                    return self.make_token(TokenKind::Integer(value));
                 }
             }
-            // Parse as float
-            let value: f64 = self.current_lexeme().parse().unwrap_or(0.0);
-            return self.make_token(TokenKind::Float(value));
+
+            if !overflow {
+                let digit = (c - b'0') as i64;
+                if let Some(v) = value.checked_mul(10).and_then(|v| v.checked_add(digit)) {
+                    value = v;
+                } else {
+                    overflow = true;
+                }
+            }
         }
 
-        // Parse as integer
-        let value: i64 = self.current_lexeme().parse().unwrap_or(0);
-        self.make_token(TokenKind::Integer(value))
+        // If we finished the loop, we reached EOF or end of slice
+        self.pos = self.bytes.len();
+
+        if overflow {
+            self.make_token(TokenKind::Integer(0))
+        } else {
+            self.make_token(TokenKind::Integer(value))
+        }
     }
 
     fn hex_number(&mut self) -> Token<'a> {
         // $ followed by hex digits
-        let start = self.pos;
-        while let Some(c) = self.peek() {
-            if c.is_ascii_hexdigit() {
-                self.advance();
-            } else {
-                break;
+        let mut value: i64 = 0;
+        let mut overflow = false;
+
+        let remaining = &self.bytes[self.pos..];
+        for (i, &c) in remaining.iter().enumerate() {
+            let digit = match c {
+                b'0'..=b'9' => c - b'0',
+                b'a'..=b'f' => c - b'a' + 10,
+                b'A'..=b'F' => c - b'A' + 10,
+                _ => {
+                    self.pos += i;
+                    if overflow {
+                        return self.make_token(TokenKind::Integer(0));
+                    } else {
+                        return self.make_token(TokenKind::Integer(value));
+                    }
+                }
+            };
+
+            if !overflow {
+                if let Some(v) = value.checked_mul(16).and_then(|v| v.checked_add(digit as i64)) {
+                    value = v;
+                } else {
+                    overflow = true;
+                }
             }
         }
         
-        let hex_str = &self.source[start..self.pos];
-        let value = i64::from_str_radix(hex_str, 16).unwrap_or(0);
-        self.make_token(TokenKind::Integer(value))
+        self.pos = self.bytes.len();
+
+        if overflow {
+             self.make_token(TokenKind::Integer(0))
+        } else {
+             self.make_token(TokenKind::Integer(value))
+        }
     }
 
     fn hex_number_0x(&mut self) -> Token<'a> {
         // 0x followed by hex digits (0x already consumed)
-        let start = self.pos;
-        while let Some(c) = self.peek() {
-            if c.is_ascii_hexdigit() {
-                self.advance();
-            } else {
-                break;
+        let mut value: i64 = 0;
+        let mut overflow = false;
+        let mut has_digits = false;
+
+        let remaining = &self.bytes[self.pos..];
+        for (i, &c) in remaining.iter().enumerate() {
+            let digit = match c {
+                b'0'..=b'9' => c - b'0',
+                b'a'..=b'f' => c - b'a' + 10,
+                b'A'..=b'F' => c - b'A' + 10,
+                _ => {
+                    self.pos += i;
+                    if !has_digits {
+                        return self.make_token(TokenKind::Error(Box::new("Empty hex literal".into())));
+                    }
+                    if overflow {
+                        return self.make_token(TokenKind::Integer(0));
+                    } else {
+                        return self.make_token(TokenKind::Integer(value));
+                    }
+                }
+            };
+
+            has_digits = true;
+            if !overflow {
+                if let Some(v) = value.checked_mul(16).and_then(|v| v.checked_add(digit as i64)) {
+                    value = v;
+                } else {
+                    overflow = true;
+                }
             }
         }
         
-        let hex_str = &self.source[start..self.pos];
-        if hex_str.is_empty() {
-            return self.make_token(TokenKind::Error("Empty hex literal".to_string()));
+        self.pos = self.bytes.len();
+
+        if !has_digits {
+            return self.make_token(TokenKind::Error(Box::new("Empty hex literal".into())));
         }
-        let value = i64::from_str_radix(hex_str, 16).unwrap_or(0);
-        self.make_token(TokenKind::Integer(value))
+
+        if overflow {
+             self.make_token(TokenKind::Integer(0))
+        } else {
+             self.make_token(TokenKind::Integer(value))
+        }
     }
 
     fn binary_number(&mut self) -> Token<'a> {
         // 0b followed by binary digits (0b already consumed)
-        let start = self.pos;
-        while let Some(c) = self.peek() {
-            if c == b'0' || c == b'1' || c == b'_' {
-                self.advance();
-            } else {
-                break;
+        let mut value: i64 = 0;
+        let mut overflow = false;
+        let mut has_digits = false;
+
+        let remaining = &self.bytes[self.pos..];
+        for (i, &c) in remaining.iter().enumerate() {
+            if c == b'_' {
+                continue;
+            }
+            if c != b'0' && c != b'1' {
+                self.pos += i;
+                if !has_digits {
+                    return self.make_token(TokenKind::Error(Box::new("Empty binary literal".into())));
+                }
+                if overflow {
+                    return self.make_token(TokenKind::Integer(0));
+                } else {
+                    return self.make_token(TokenKind::Integer(value));
+                }
+            }
+
+            has_digits = true;
+            let digit = (c - b'0') as i64;
+             if !overflow {
+                if let Some(v) = value.checked_mul(2).and_then(|v| v.checked_add(digit)) {
+                    value = v;
+                } else {
+                    overflow = true;
+                }
             }
         }
-        
-        let bin_str: String = self.source[start..self.pos].chars().filter(|c| *c != '_').collect();
-        if bin_str.is_empty() {
-            return self.make_token(TokenKind::Error("Empty binary literal".to_string()));
+
+        self.pos = self.bytes.len();
+
+        if !has_digits {
+             return self.make_token(TokenKind::Error(Box::new("Empty binary literal".into())));
         }
-        let value = i64::from_str_radix(&bin_str, 2).unwrap_or(0);
-        self.make_token(TokenKind::Integer(value))
+
+        if overflow {
+             self.make_token(TokenKind::Integer(0))
+        } else {
+             self.make_token(TokenKind::Integer(value))
+        }
     }
 
     fn identifier(&mut self) -> Token<'a> {
-        while let Some(c) = self.peek() {
-            if is_ident_continue(c) {
-                self.advance();
-            } else {
-                break;
-            }
-        }
+        // Optimized scan: find end of identifier
+        let remaining = &self.bytes[self.pos..];
+        // Use position to find first non-identifier char.
+        // If not found, it means the rest of the string is identifier.
+        let len = remaining.iter()
+            .position(|&c| !IDENT_CONTINUE[c as usize])
+            .unwrap_or(remaining.len());
+
+        self.pos += len;
 
         let text = self.current_lexeme();
         let kind = match text {
@@ -620,7 +885,7 @@ impl<'a> Lexer<'a> {
             "xor" => TokenKind::Xor,
             "div" => TokenKind::Div,
             "mod" => TokenKind::Mod,
-            _ => TokenKind::Identifier(text),
+            _ => TokenKind::Identifier,
         };
 
         self.make_token(kind)
@@ -655,12 +920,12 @@ impl<'a> Lexer<'a> {
             }
         }
         
-        while let Some(c) = self.peek() {
-            if is_ident_continue(c) {
-                self.advance();
-            } else {
+        while self.pos < self.bytes.len() {
+            let c = self.bytes[self.pos];
+            if !is_ident_continue(c) {
                 break;
             }
+            self.pos += 1;
         }
 
         let text = self.current_lexeme();
@@ -668,13 +933,14 @@ impl<'a> Lexer<'a> {
             "#macro" => {
                 self.skip_whitespace();
                 let name_start = self.pos;
-                while let Some(c) = self.peek() {
-                    if is_ident_continue(c) {
-                        self.advance();
-                    } else {
+                while self.pos < self.bytes.len() {
+                    let c = self.bytes[self.pos];
+                    if !is_ident_continue(c) {
                         break;
                     }
+                    self.pos += 1;
                 }
+
                 let name = &self.source[name_start..self.pos];
                 
                 // Consume the rest of the macro definition (with backslashes)
@@ -705,35 +971,41 @@ impl<'a> Lexer<'a> {
                 }
                 let body = self.source[body_start..self.pos].trim();
                 let body = if body.is_empty() { None } else { Some(body) };
-                self.make_token(TokenKind::Macro(name, body))
+                self.make_token(TokenKind::Macro(Box::new(MacroDefinition { name, body })))
             }
             "#define" => {
                 self.skip_whitespace();
-                let name_start = self.pos;
-                while let Some(c) = self.peek() {
-                    if is_ident_continue(c) { self.advance(); } else { break; }
+                while self.pos < self.bytes.len() {
+                    let c = self.bytes[self.pos];
+                    if !is_ident_continue(c) {
+                        break;
+                    }
+                    self.pos += 1;
                 }
-                let name = &self.source[name_start..self.pos];
-                while let Some(c) = self.peek() {
-                    if c == b'\n' { break; }
-                    self.advance();
+
+                // let name = &self.source[name_start..self.pos];
+                if let Some(pos) = memchr(b'\n', &self.bytes[self.pos..]) {
+                    self.pos += pos;
+                } else {
+                    self.pos = self.bytes.len();
                 }
-                self.make_token(TokenKind::Define(name))
+                self.make_token(TokenKind::Define)
             }
             "#region" | "#section" => {
                 self.skip_whitespace();
-                let name_start = self.pos;
-                while let Some(c) = self.peek() {
-                    if c == b'\n' || c == b'\r' { break; }
-                    self.advance();
+                if let Some(pos) = memchr2(b'\n', b'\r', &self.bytes[self.pos..]) {
+                    self.pos += pos;
+                } else {
+                    self.pos = self.bytes.len();
                 }
-                let name = self.source[name_start..self.pos].trim();
-                self.make_token(TokenKind::Region(name))
+                // let name = self.source[name_start..self.pos].trim();
+                self.make_token(TokenKind::Region)
             }
             "#endregion" => {
-                while let Some(c) = self.peek() {
-                    if c == b'\n' || c == b'\r' { break; }
-                    self.advance();
+                if let Some(pos) = memchr2(b'\n', b'\r', &self.bytes[self.pos..]) {
+                    self.pos += pos;
+                } else {
+                    self.pos = self.bytes.len();
                 }
                 self.make_token(TokenKind::EndRegion)
             }
@@ -744,13 +1016,15 @@ impl<'a> Lexer<'a> {
 
 
 /// Check if a character can start an identifier
+#[inline]
 fn is_ident_start(c: u8) -> bool {
-    c.is_ascii_alphabetic() || c == b'_'
+    IDENT_START[c as usize]
 }
 
 /// Check if a character can continue an identifier
+#[inline]
 fn is_ident_continue(c: u8) -> bool {
-    c.is_ascii_alphanumeric() || c == b'_'
+    IDENT_CONTINUE[c as usize]
 }
 
 #[cfg(test)]
@@ -764,7 +1038,7 @@ mod tests {
         let tokens = lexer.tokenize();
         
         assert!(matches!(tokens[0].kind, TokenKind::Var));
-        assert!(matches!(tokens[1].kind, TokenKind::Identifier(_)));
+        assert!(matches!(tokens[1].kind, TokenKind::Identifier));
         assert!(matches!(tokens[2].kind, TokenKind::Assign));
         assert!(matches!(tokens[3].kind, TokenKind::Integer(42)));
         assert!(matches!(tokens[4].kind, TokenKind::Semicolon));
@@ -778,11 +1052,7 @@ mod tests {
         let tokens = lexer.tokenize();
         
         assert!(matches!(tokens[0].kind, TokenKind::Function));
-        if let TokenKind::Identifier(name) = tokens[1].kind {
-            assert_eq!(name, "foo");
-        } else {
-            panic!("Expected identifier");
-        }
+        assert!(matches!(tokens[1].kind, TokenKind::Identifier));
     }
 
     #[test]
@@ -791,11 +1061,7 @@ mod tests {
         let lexer = Lexer::new(source);
         let tokens = lexer.tokenize();
         
-        if let TokenKind::String(content) = tokens[0].kind {
-            assert_eq!(content, r#""hello world""#);
-        } else {
-            panic!("Expected string");
-        }
+        assert!(matches!(tokens[0].kind, TokenKind::String));
     }
 
     #[test]
@@ -804,9 +1070,9 @@ mod tests {
         let lexer = Lexer::new(source);
         let tokens = lexer.tokenize();
         
-        if let TokenKind::Macro(name, body) = &tokens[0].kind {
-            assert_eq!(*name, "UI_TEXT_RENDERER");
-            assert_eq!(*body, Some("scribble"));
+        if let TokenKind::Macro(def) = &tokens[0].kind {
+            assert_eq!(def.name, "UI_TEXT_RENDERER");
+            assert_eq!(def.body, Some("scribble"));
         } else {
             panic!("Expected macro");
         }
@@ -827,7 +1093,7 @@ mod tests {
         let lexer = Lexer::new(source);
         let tokens = lexer.tokenize();
         
-        assert!(matches!(&tokens[0].kind, TokenKind::DocComment(_)));
+        assert!(matches!(&tokens[0].kind, TokenKind::DocComment));
     }
 
     #[test]
@@ -836,6 +1102,32 @@ mod tests {
         let lexer = Lexer::new(source);
         let tokens = lexer.tokenize();
         
-        assert!(matches!(tokens[2].kind, TokenKind::NullCoalesce));
+        assert!(matches!(tokens[1].kind, TokenKind::NullCoalesce));
+    }
+
+    #[test]
+    fn test_token_size() {
+        println!("Token size: {}", std::mem::size_of::<Token>());
+        println!("TokenKind size: {}", std::mem::size_of::<TokenKind>());
+    }
+
+    #[test]
+    #[ignore]
+    fn benchmark_lexer() {
+        let mut source = String::with_capacity(10_000_000);
+        for _ in 0..100_000 {
+            source.push_str("var x = 12345; // comment\n");
+            source.push_str("if (x > 10) { return \"string\"; }\n");
+            source.push_str("#macro FOO 123\n");
+            source.push_str("var b = 0b1010_1010;\n");
+            source.push_str("var h = $FF00FF;\n");
+        }
+
+        let start = std::time::Instant::now();
+        let lexer = Lexer::new(&source);
+        let tokens = lexer.tokenize();
+        let duration = start.elapsed();
+
+        println!("Lexed {} tokens in {:?}", tokens.len(), duration);
     }
 }

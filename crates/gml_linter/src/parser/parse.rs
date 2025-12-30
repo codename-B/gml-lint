@@ -2,8 +2,8 @@
 //!
 //! A hand-written recursive descent parser for GML.
 
-use gml_lexer::{Lexer, Span, Token, TokenKind};
-use crate::ast::*;
+use crate::lexer::{Lexer, Span, Token, TokenKind};
+use super::ast::*;
 
 
 /// Parse error
@@ -25,6 +25,7 @@ impl ParseError {
 /// The GML parser
 pub struct Parser<'a> {
     tokens: Vec<Token<'a>>,
+    source: &'a str,
     current: usize,
     errors: Vec<ParseError>,
 }
@@ -37,6 +38,7 @@ impl<'a> Parser<'a> {
         let tokens = lexer.tokenize();
         Self {
             tokens,
+            source,
             current: 0,
             errors: Vec::new(),
         }
@@ -76,12 +78,17 @@ impl<'a> Parser<'a> {
         &self.errors
     }
 
+    /// Get source text for a token span
+    pub fn token_text(&self, span: Span) -> &'a str {
+        &self.source[span.start as usize..span.end as usize]
+    }
+
     // ========== Statement parsing ==========
 
     fn parse_statement(&mut self) -> Result<Stmt<'a>, ParseError> {
 
         // Handle preprocessor directives (comments are auto-skipped by peek/advance)
-        if matches!(self.peek_kind(), Some(TokenKind::Macro(_, _)) | Some(TokenKind::Region(_)) | Some(TokenKind::EndRegion) | Some(TokenKind::Define(_))) {
+        if matches!(self.peek_kind(), Some(TokenKind::Macro(_)) | Some(TokenKind::Region) | Some(TokenKind::EndRegion) | Some(TokenKind::Define)) {
             let span = self.current_span();
             self.advance();
             // Lexer already consumed the line/body, so we don't need to skip
@@ -282,7 +289,7 @@ impl<'a> Parser<'a> {
         self.expect(&TokenKind::Function)?;
         
         // Anonymous function - name is optional (may be present for debugging)
-        let _optional_name = if let Some(TokenKind::Identifier(_)) = self.peek_kind() {
+        let _optional_name = if let Some(TokenKind::Identifier) = self.peek_kind() {
             // Named function expression (like JavaScript's named function expressions)
             Some(self.expect_identifier()?)
         } else {
@@ -299,7 +306,7 @@ impl<'a> Parser<'a> {
         // Handle inheritance for constructor expressions
         if self.match_token(&TokenKind::Colon) {
             // Skip parent constructor call
-            if let Some(TokenKind::Identifier(_)) = self.peek_kind() {
+            if let Some(TokenKind::Identifier) = self.peek_kind() {
                 self.advance();
                 if self.match_token(&TokenKind::LeftParen) {
                     self.parse_arguments()?;
@@ -575,7 +582,7 @@ impl<'a> Parser<'a> {
                 continue;
             }
             
-            if matches!(self.peek_kind(), Some(TokenKind::Region(_)) | Some(TokenKind::EndRegion) | Some(TokenKind::Macro(_, _)) | Some(TokenKind::Define(_))) {
+            if matches!(self.peek_kind(), Some(TokenKind::Region) | Some(TokenKind::EndRegion) | Some(TokenKind::Macro(_)) | Some(TokenKind::Define)) {
                 self.advance();
                 continue;
             }
@@ -1290,9 +1297,10 @@ impl<'a> Parser<'a> {
         }
 
         
-        if let Some(TokenKind::String(s)) = self.peek_kind() {
-            let s = *s;
-            self.advance();
+        if let Some(TokenKind::String) = self.peek_kind() {
+            let token = self.advance();
+            let span = token.span;
+            let s = self.token_text(span);
             return Ok(Expr::Literal { value: Literal::String(s), span });
         }
 
@@ -1316,9 +1324,10 @@ impl<'a> Parser<'a> {
             return self.parse_function_expr();
         }
         
-        if let Some(TokenKind::Identifier(name)) = self.peek_kind() {
-            let name = *name;
-            self.advance();
+        if let Some(TokenKind::Identifier) = self.peek_kind() {
+            let token = self.advance();
+            let span = token.span;
+            let name = self.token_text(span);
             return Ok(Expr::Identifier { name, span });
         }
         
@@ -1357,9 +1366,10 @@ impl<'a> Parser<'a> {
             let mut fields = Vec::new();
             if !self.check(&TokenKind::RightBrace) {
                 loop {
-                    let key = if let Some(TokenKind::String(s)) = self.peek_kind() {
-                        let s = *s;
-                        self.advance();
+                    let key = if let Some(TokenKind::String) = self.peek_kind() {
+                        let token = self.advance();
+                        let span = token.span;
+                        let s = self.token_text(span);
                         s
                     } else {
                         self.expect_identifier()?
@@ -1405,7 +1415,7 @@ impl<'a> Parser<'a> {
         let mut idx = self.current;
         while idx < self.tokens.len() {
             match &self.tokens[idx].kind {
-                TokenKind::LineComment(_) | TokenKind::BlockComment(_) | TokenKind::DocComment(_) => {
+                TokenKind::LineComment | TokenKind::BlockComment | TokenKind::DocComment => {
                     idx += 1;
                 }
                 _ => return Some(&self.tokens[idx]),
@@ -1438,7 +1448,7 @@ impl<'a> Parser<'a> {
         // First, skip any comments at current position (so we consume the real token)
         while self.current < self.tokens.len() {
             match &self.tokens[self.current].kind {
-                TokenKind::LineComment(_) | TokenKind::BlockComment(_) | TokenKind::DocComment(_) => {
+                TokenKind::LineComment | TokenKind::BlockComment | TokenKind::DocComment => {
                     self.current += 1;
                 }
                 _ => break,
@@ -1462,9 +1472,9 @@ impl<'a> Parser<'a> {
     fn check_comment(&self) -> bool {
         matches!(
             self.peek_kind(),
-            Some(TokenKind::LineComment(_))
-                | Some(TokenKind::BlockComment(_))
-                | Some(TokenKind::DocComment(_))
+            Some(TokenKind::LineComment)
+                | Some(TokenKind::BlockComment)
+                | Some(TokenKind::DocComment)
         )
     }
 
@@ -1496,9 +1506,10 @@ impl<'a> Parser<'a> {
     }
 
     fn expect_identifier(&mut self) -> Result<&'a str, ParseError> {
-        if let Some(TokenKind::Identifier(name)) = self.peek_kind() {
-            let name = *name;
-            self.advance();
+        if let Some(TokenKind::Identifier) = self.peek_kind() {
+            let token = self.advance();
+            let span = token.span;
+            let name = self.token_text(span);
             Ok(name)
         } else {
             Err(ParseError::new(
@@ -1551,8 +1562,8 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Exit)
                 | Some(TokenKind::LeftBrace)
                 | Some(TokenKind::RightBrace)
-                | Some(TokenKind::Macro(_, _))
-                | Some(TokenKind::Region(_))
+                | Some(TokenKind::Macro(_))
+                | Some(TokenKind::Region)
                 | Some(TokenKind::EndRegion)
                 | Some(TokenKind::Switch)
                 | Some(TokenKind::Break)

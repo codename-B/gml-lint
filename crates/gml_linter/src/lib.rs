@@ -10,12 +10,20 @@
 //!    - Validates control flow (break/continue/return)
 //!    - Runs semantic rules (unused variables)
 
+pub mod lexer;
+pub mod parser;
+pub mod diagnostics;
+pub mod cache;
+pub mod project;
+pub mod semantic;
+pub mod walker;
+
 mod checker;
 mod context;
 pub mod keywords;
 mod rule;
 pub mod rules;
-pub mod semantic;
+pub mod semantic_model;
 #[cfg(test)]
 pub mod test_utils;
 pub mod builtins;
@@ -24,10 +32,10 @@ pub mod builtins;
 
 pub use context::{LintContext, SymbolProvider, DefaultSymbolProvider};
 pub use rule::{Rule, RuleCode};
-pub use semantic::SemanticModel;
-pub use gml_diagnostics::{Diagnostic, Severity, Category, Location};
+pub use semantic_model::SemanticModel;
+pub use diagnostics::{Diagnostic, Severity, Category, Location};
+pub use parser::Parser;
 
-use gml_parser::Parser;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 // Global statistics for profiling
@@ -106,7 +114,7 @@ pub fn lint_source_with_rules(source: &str, file_path: &str, rules: &[Box<dyn Ru
 
     // Create lint context
     let start_lint = std::time::Instant::now();
-    let db = gml_semantic::db::Database::new();
+    let db = semantic::db::Database::new();
     let ctx = LintContext::new(source, file_path, &program, symbol_provider, &db);
     
     // Run unified single-pass checker
@@ -130,4 +138,3 @@ pub fn lint_file(path: &str) -> Result<Vec<Diagnostic>, std::io::Error> {
     let source = std::fs::read_to_string(path)?;
     Ok(lint_source(&source, path))
 }
-

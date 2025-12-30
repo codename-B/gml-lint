@@ -3,8 +3,8 @@
 //! Warns when a condition is not wrapped in parentheses.
 //! This promotes better style and consistency.
 
-use gml_diagnostics::{Category, Diagnostic, Location, Fix, Edit};
-use gml_parser::{Expr, Stmt};
+use crate::diagnostics::{Category, Diagnostic, Location, Fix, Edit};
+use crate::parser::{Expr, Stmt};
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
 
@@ -27,7 +27,7 @@ impl Rule for RequireParentheses {
         "Control flow statements should use parentheses around conditions."
     }
 
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
 
         match stmt {
             Stmt::If { condition, has_parentheses, .. } => {

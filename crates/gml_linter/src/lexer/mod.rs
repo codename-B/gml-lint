@@ -4,7 +4,7 @@
 //! a stream of tokens suitable for parsing.
 
 mod token;
-mod lexer;
+mod lex;
 
 pub use token::{Token, TokenKind, Span};
-pub use lexer::Lexer;
+pub use lex::Lexer;

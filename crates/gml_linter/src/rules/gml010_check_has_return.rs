@@ -3,8 +3,8 @@
 //! Warns when a function is inconsistent about returning values.
 //! If some paths return a value, all paths should return a value.
 
-use gml_diagnostics::{Category, Diagnostic, Location, Fix, Edit};
-use gml_parser::{Stmt, Expr, Block};
+use crate::diagnostics::{Category, Diagnostic, Location, Fix, Edit};
+use crate::parser::{Stmt, Expr, Block};
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
 pub struct CheckHasReturn;
@@ -26,13 +26,13 @@ impl Rule for CheckHasReturn {
         "Functions should consistently return values or not."
     }
 
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
         if let Stmt::FunctionDecl { body, name: _, span, .. } = stmt {
             self.check_function_body(ctx, body, *span, diagnostics);
         }
     }
 
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         if let Expr::FunctionExpr { body, span, .. } = expr {
             // For anonymous functions, use the function keyword span or start of span
             self.check_function_body(ctx, body, *span, diagnostics);
@@ -45,7 +45,7 @@ impl CheckHasReturn {
         &self,
         ctx: &LintContext<'a>,
         body: &Block<'a>,
-        report_span: gml_lexer::Span,
+        report_span: crate::lexer::Span,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let mut has_val_return = false;
@@ -114,13 +114,13 @@ impl CheckHasReturn {
         }
     }
 
-    fn collect_returns<'a, 'b>(&self, body: &'b Block<'a>, returns: &mut Vec<(Option<&'b Expr<'a>>, gml_lexer::Span)>) {
+    fn collect_returns<'a, 'b>(&self, body: &'b Block<'a>, returns: &mut Vec<(Option<&'b Expr<'a>>, crate::lexer::Span)>) {
         for stmt in &body.statements {
             self.collect_returns_in_stmt(stmt, returns);
         }
     }
 
-    fn collect_returns_in_stmt<'a, 'b>(&self, stmt: &'b Stmt<'a>, returns: &mut Vec<(Option<&'b Expr<'a>>, gml_lexer::Span)>) {
+    fn collect_returns_in_stmt<'a, 'b>(&self, stmt: &'b Stmt<'a>, returns: &mut Vec<(Option<&'b Expr<'a>>, crate::lexer::Span)>) {
         match stmt {
             Stmt::Return { value, span } => {
                 returns.push((value.as_ref(), *span));

@@ -20,6 +20,7 @@ mod gml021_invalid_assignment;
 mod gml022_unknown_identifier;
 mod gml023_uninitialized_global;
 mod gml024_simplify_undefined_check;
+mod gml025_unsupported_ternary;
 
 use crate::Rule;
 
@@ -42,6 +43,11 @@ pub use gml021_invalid_assignment::InvalidAssignment;
 pub use gml022_unknown_identifier::UnknownIdentifier;
 pub use gml023_uninitialized_global::UninitializedGlobal;
 pub use gml024_simplify_undefined_check::SimplifyUndefinedCheck;
+pub use gml025_unsupported_ternary::UnsupportedTernary;
+mod gml026_uncaptured_closure_var;
+pub use gml026_uncaptured_closure_var::UncapturedClosureVar;
+mod gml027_redundant_comparison;
+pub use gml027_redundant_comparison::RedundantBooleanComparison;
 
 /// Get all built-in rules
 /// Note: GML003 (UnusedVariable) is handled by semantic rules in lib.rs, not here
@@ -66,5 +72,8 @@ pub fn all_rules() -> Vec<Box<dyn Rule>> {
         Box::new(UnknownIdentifier),
         Box::new(UninitializedGlobal),
         Box::new(SimplifyUndefinedCheck),
+        Box::new(UnsupportedTernary),
+        Box::new(UncapturedClosureVar),
+        Box::new(RedundantBooleanComparison),
     ]
 }

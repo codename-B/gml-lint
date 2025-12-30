@@ -5,8 +5,8 @@
 //!
 //! This rule uses the single-pass visitor pattern.
 
-use gml_diagnostics::{Category, Diagnostic, Edit, Fix, Location};
-use gml_parser::{AssignOp, BinaryOp, Expr, Stmt};
+use crate::diagnostics::{Category, Diagnostic, Edit, Fix, Location};
+use crate::parser::{AssignOp, BinaryOp, Expr, Stmt};
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
 
@@ -31,7 +31,7 @@ impl Rule for NoSingleEquals {
 
     // Note: check() is not overridden - we use check_stmt() for single-pass traversal
     
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
 
         // Check conditions in control flow statements
         match stmt {
@@ -51,7 +51,7 @@ impl Rule for NoSingleEquals {
         }
     }
     
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         // Check for assignment using ==
         // Check for assignment using ==
         // (Removed invalid check for AssignOp::Equal)

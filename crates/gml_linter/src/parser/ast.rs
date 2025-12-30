@@ -1,6 +1,6 @@
 //! AST node definitions for GML
 
-use gml_lexer::Span;
+use crate::lexer::Span;
 
 /// A GML program (file)
 #[derive(Debug, Clone)]

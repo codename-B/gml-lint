@@ -3,8 +3,8 @@
 //! GML017: Warn when 'new' is used on non-constructor functions.
 //! GML018: Warn when a constructor is called as a regular function.
 
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::Expr;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::Expr;
 
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
@@ -27,7 +27,7 @@ impl Rule for ConstructorValidation {
         "Checks for constructor usage errors (GML017: missing new, GML018: invalid constructor call)."
     }
 
-    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_expr<'a>(&self, ctx: &LintContext<'a>, model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, expr: &Expr<'a>, diagnostics: &mut Vec<Diagnostic>) {
         match expr {
             Expr::New { callee, span, .. } => {
                 if let Expr::Identifier { name, .. } = callee.as_ref() {
@@ -35,7 +35,7 @@ impl Rule for ConstructorValidation {
                         if let Some(binding) = model.get_binding(id) {
                             // We need to track is_constructor in Binding
                             // For now we check if it's a function
-                            if binding.kind == crate::semantic::BindingKind::Function && !binding.is_constructor {
+                            if binding.kind == crate::semantic_model::BindingKind::Function && !binding.is_constructor {
                                 let (line, col) = ctx.offset_to_line_col(span.start);
                                 diagnostics.push(Diagnostic::warning(
                                     "GML017",

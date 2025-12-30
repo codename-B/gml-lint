@@ -1,8 +1,8 @@
 #[cfg(test)]
 use crate::{LintContext, DefaultSymbolProvider};
 use crate::checker::Checker;
-use gml_parser::Parser;
-use gml_semantic::db::Database;
+use crate::parser::Parser;
+use crate::semantic::db::Database;
 
 
 #[cfg(test)]

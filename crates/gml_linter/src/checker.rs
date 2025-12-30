@@ -8,12 +8,12 @@
 //!
 //! This eliminates 3-4 separate traversals, providing ~3-4x speedup.
 
-use gml_diagnostics::Diagnostic;
-use gml_lexer::Span;
-use gml_parser::{Program, Stmt, Expr, Param, Block};
-use crate::semantic::{BindingKind, ScopeKind, SemanticModel};
+use crate::diagnostics::Diagnostic;
+use crate::lexer::Span;
+use crate::parser::{Program, Stmt, Expr, Param, Block};
+use crate::semantic_model::{BindingKind, ScopeKind, SemanticModel};
 use crate::{LintContext, Rule};
-use gml_semantic::Db;
+use crate::semantic::Db;
 
 /// Context flags for control flow validation
 #[derive(Clone, Copy)]
@@ -36,7 +36,7 @@ impl Default for ControlFlowContext {
 }
 
 
-use gml_semantic::scope::TypeEnv;
+use crate::semantic::scope::TypeEnv;
 
 /// Unified checker that does everything in one AST pass
 pub struct Checker<'a> {
@@ -47,7 +47,7 @@ pub struct Checker<'a> {
 
     diagnostics: Vec<Diagnostic>,
     cf_ctx: ControlFlowContext,
-    return_stack: Vec<Vec<gml_semantic::types::Type>>,
+    return_stack: Vec<Vec<crate::semantic::types::Type>>,
 }
 
 impl<'a> Checker<'a> {
@@ -105,13 +105,13 @@ impl<'a> Checker<'a> {
                     
                     if let Some(init) = &decl.init {
                         // Infer type from initializer
-                        let ty = gml_semantic::infer::infer_expression(self.ctx.db(), &self.type_env, init);
+                        let ty = crate::semantic::infer::infer_expression(self.ctx.db(), &self.type_env, init);
                         self.type_env.insert(decl.name.to_string(), ty);
                         
                         self.visit_expr(init);
                     } else {
                         // Uninitialized vars are typically Any or Undefined until assigned
-                        self.type_env.insert(decl.name.to_string(), gml_semantic::types::Type::Undefined);
+                        self.type_env.insert(decl.name.to_string(), crate::semantic::types::Type::Undefined);
                     }
                 }
             }
@@ -157,7 +157,7 @@ impl<'a> Checker<'a> {
                     self.model.add_binding(param.name, BindingKind::Parameter, param_span, param.span, None, None, false);
                     
                     // Parameters are Any by default (unless we have JSDoc)
-                    self.type_env.insert(param.name.to_string(), gml_semantic::types::Type::Any);
+                    self.type_env.insert(param.name.to_string(), crate::semantic::types::Type::Any);
 
                     if let Some(default) = &param.default {
                         self.visit_expr(default);
@@ -181,7 +181,7 @@ impl<'a> Checker<'a> {
                 self.type_env = old_env;
                 
                 // Update the parent environment with the function type
-                self.type_env.insert(name.to_string(), gml_semantic::types::Type::Function(fn_id));
+                self.type_env.insert(name.to_string(), crate::semantic::types::Type::Function(fn_id));
                 
                 self.model.pop_scope();
             }
@@ -194,7 +194,7 @@ impl<'a> Checker<'a> {
                 self.type_env = self.type_env.fork();
                 
                 // Apply positive type narrowing
-                let narrowing = gml_semantic::narrow::infer_narrowing(condition, true);
+                let narrowing = crate::semantic::narrow::infer_narrowing(condition, true);
                 for (name, ty) in narrowing {
                     self.type_env.insert(name, ty);
                 }
@@ -207,7 +207,7 @@ impl<'a> Checker<'a> {
                 
                 if let Some(else_stmt) = else_branch {
                      // Apply negative type narrowing for else branch
-                     let narrowing = gml_semantic::narrow::infer_narrowing(condition, false);
+                     let narrowing = crate::semantic::narrow::infer_narrowing(condition, false);
                      if !narrowing.is_empty() {
                          let old_else_env = self.type_env.clone();
                          for (name, ty) in narrowing {
@@ -404,14 +404,14 @@ impl<'a> Checker<'a> {
                     self.diagnostics.push(Diagnostic::error(
                         "GML016",
                         "`return` statement outside of function".to_string(),
-                        gml_diagnostics::Location::new(self.ctx.file_path(), line, col, span.start, span.end),
+                        crate::diagnostics::Location::new(self.ctx.file_path(), line, col, span.start, span.end),
                     ));
                 }
                 
                 let ty = if let Some(val) = value {
-                    gml_semantic::infer::infer_expression(self.ctx.db(), &self.type_env, val)
+                    crate::semantic::infer::infer_expression(self.ctx.db(), &self.type_env, val)
                 } else {
-                    gml_semantic::types::Type::Undefined
+                    crate::semantic::types::Type::Undefined
                 };
                 if let Some(stack) = self.return_stack.last_mut() {
                     stack.push(ty);
@@ -431,7 +431,7 @@ impl<'a> Checker<'a> {
                     self.diagnostics.push(Diagnostic::error(
                         "GML014",
                         "`break` statement outside of loop or switch".to_string(),
-                        gml_diagnostics::Location::new(self.ctx.file_path(), line, col, span.start, span.end),
+                        crate::diagnostics::Location::new(self.ctx.file_path(), line, col, span.start, span.end),
                     ));
                 }
             }
@@ -442,7 +442,7 @@ impl<'a> Checker<'a> {
                     self.diagnostics.push(Diagnostic::error(
                         "GML015",
                         "`continue` statement outside of loop".to_string(),
-                        gml_diagnostics::Location::new(self.ctx.file_path(), line, col, span.start, span.end),
+                        crate::diagnostics::Location::new(self.ctx.file_path(), line, col, span.start, span.end),
                     ));
                 }
             }
@@ -500,13 +500,13 @@ impl<'a> Checker<'a> {
                     }
                     
                     // Update TypeEnv
-                    let ty = gml_semantic::infer::infer_expression(self.ctx.db(), &self.type_env, value);
+                    let ty = crate::semantic::infer::infer_expression(self.ctx.db(), &self.type_env, value);
                     self.type_env.insert(name.to_string(), ty);
                 } else if let Expr::Member { object, field, .. } = target.as_ref() {
                     // Update struct field in DB if object's type is a known struct
-                    let obj_ty = gml_semantic::infer::infer_expression(self.ctx.db(), &self.type_env, object);
-                    if let gml_semantic::types::Type::Struct(id) = obj_ty {
-                        let val_ty = gml_semantic::infer::infer_expression(self.ctx.db(), &self.type_env, value);
+                    let obj_ty = crate::semantic::infer::infer_expression(self.ctx.db(), &self.type_env, object);
+                    if let crate::semantic::types::Type::Struct(id) = obj_ty {
+                        let val_ty = crate::semantic::infer::infer_expression(self.ctx.db(), &self.type_env, value);
                         self.ctx.db().add_struct_field(id, field.to_string(), val_ty);
                     }
                 }
@@ -539,7 +539,17 @@ impl<'a> Checker<'a> {
                     }
                 }
 
-                self.visit_expr(callee);
+                // If callee is a simple identifier, skip visit_expr to avoid
+                // duplicate GML022 diagnostics (GML013 handles unknown functions).
+                // For non-identifier callees (e.g., member expressions), visit normally.
+                if !matches!(callee.as_ref(), Expr::Identifier { .. }) {
+                    self.visit_expr(callee);
+                } else {
+                    // Still add reference for semantic model
+                    if let Expr::Identifier { name, .. } = callee.as_ref() {
+                        self.model.add_reference(name);
+                    }
+                }
                 for (i, arg) in args.iter().enumerate() {
                     // If this is the second argument to method() and we found keys, inject them
                     if i == 1 && !method_context_keys.is_empty() {
@@ -646,7 +656,7 @@ impl<'a> Checker<'a> {
             self.model.add_binding(param.name, BindingKind::Parameter, param_span, param.span, None, None, false);
             
             // Parameters are Any by default
-            self.type_env.insert(param.name.to_string(), gml_semantic::types::Type::Any);
+            self.type_env.insert(param.name.to_string(), crate::semantic::types::Type::Any);
         }
 
         for stmt in &body.statements {
@@ -727,13 +737,13 @@ pub fn check_program<'a>(
     diagnostics
 }
 
-fn unify_types(types: &[gml_semantic::types::Type]) -> gml_semantic::types::Type {
-    if types.is_empty() { return gml_semantic::types::Type::Undefined; }
+fn unify_types(types: &[crate::semantic::types::Type]) -> crate::semantic::types::Type {
+    if types.is_empty() { return crate::semantic::types::Type::Undefined; }
     let first = &types[0];
     if types.iter().all(|t| t == first) {
         return first.clone();
     }
-    gml_semantic::types::Type::Any
+    crate::semantic::types::Type::Any
 }
 
 #[cfg(test)]
@@ -791,9 +801,9 @@ mod tests {
     fn test_break_outside_loop_is_error() {
         // Use a helper that checks for specific diagnostics
         let source = "break;";
-        let parser = gml_parser::Parser::new(source);
+        let parser = crate::parser::Parser::new(source);
         let program = parser.parse().unwrap();
-        let db = gml_semantic::db::Database::new();
+        let db = crate::semantic::db::Database::new();
         let provider = crate::DefaultSymbolProvider;
         let ctx = crate::LintContext::new(source, "test.gml", &program, &provider, &db);
         let rules: Vec<Box<dyn crate::Rule>> = vec![];
@@ -805,9 +815,9 @@ mod tests {
     #[test]
     fn test_break_inside_for_loop_is_valid() {
         let source = "for (var i = 0; i < 10; i++) { break; }";
-        let parser = gml_parser::Parser::new(source);
+        let parser = crate::parser::Parser::new(source);
         let program = parser.parse().unwrap();
-        let db = gml_semantic::db::Database::new();
+        let db = crate::semantic::db::Database::new();
         let provider = crate::DefaultSymbolProvider;
         let ctx = crate::LintContext::new(source, "test.gml", &program, &provider, &db);
         let rules: Vec<Box<dyn crate::Rule>> = vec![];
@@ -819,9 +829,9 @@ mod tests {
     #[test]
     fn test_break_inside_switch_is_valid() {
         let source = "switch (x) { case 1: break; }";
-        let parser = gml_parser::Parser::new(source);
+        let parser = crate::parser::Parser::new(source);
         let program = parser.parse().unwrap();
-        let db = gml_semantic::db::Database::new();
+        let db = crate::semantic::db::Database::new();
         let provider = crate::DefaultSymbolProvider;
         let ctx = crate::LintContext::new(source, "test.gml", &program, &provider, &db);
         let rules: Vec<Box<dyn crate::Rule>> = vec![];
@@ -837,9 +847,9 @@ mod tests {
     #[test]
     fn test_continue_outside_loop_is_error() {
         let source = "continue;";
-        let parser = gml_parser::Parser::new(source);
+        let parser = crate::parser::Parser::new(source);
         let program = parser.parse().unwrap();
-        let db = gml_semantic::db::Database::new();
+        let db = crate::semantic::db::Database::new();
         let provider = crate::DefaultSymbolProvider;
         let ctx = crate::LintContext::new(source, "test.gml", &program, &provider, &db);
         let rules: Vec<Box<dyn crate::Rule>> = vec![];
@@ -851,9 +861,9 @@ mod tests {
     #[test]
     fn test_continue_inside_while_loop_is_valid() {
         let source = "while (true) { continue; }";
-        let parser = gml_parser::Parser::new(source);
+        let parser = crate::parser::Parser::new(source);
         let program = parser.parse().unwrap();
-        let db = gml_semantic::db::Database::new();
+        let db = crate::semantic::db::Database::new();
         let provider = crate::DefaultSymbolProvider;
         let ctx = crate::LintContext::new(source, "test.gml", &program, &provider, &db);
         let rules: Vec<Box<dyn crate::Rule>> = vec![];
@@ -866,9 +876,9 @@ mod tests {
     fn test_continue_in_switch_without_loop_is_error() {
         // continue is NOT valid inside a switch unless also in a loop
         let source = "switch (x) { case 1: continue; }";
-        let parser = gml_parser::Parser::new(source);
+        let parser = crate::parser::Parser::new(source);
         let program = parser.parse().unwrap();
-        let db = gml_semantic::db::Database::new();
+        let db = crate::semantic::db::Database::new();
         let provider = crate::DefaultSymbolProvider;
         let ctx = crate::LintContext::new(source, "test.gml", &program, &provider, &db);
         let rules: Vec<Box<dyn crate::Rule>> = vec![];

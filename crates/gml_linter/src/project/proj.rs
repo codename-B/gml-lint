@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use jwalk::WalkDir;
-use crate::Yyp;
+use super::Yyp;
 
 pub struct Project {
     pub root: PathBuf,

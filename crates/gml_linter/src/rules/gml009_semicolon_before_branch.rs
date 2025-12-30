@@ -3,8 +3,8 @@
 //! Detects semicolons between a condition and its body.
 //! This is almost always a bug.
 
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::Stmt;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::Stmt;
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
 
@@ -27,7 +27,7 @@ impl Rule for SemicolonBeforeBranch {
         "Detects semicolons between a condition and its body"
     }
 
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
 
         match stmt {
             Stmt::If { then_branch, .. } => {
@@ -50,7 +50,7 @@ impl Rule for SemicolonBeforeBranch {
     }
 }
 
-fn check_semicolon(ctx: &LintContext, body: &gml_parser::Block, diagnostics: &mut Vec<Diagnostic>) {
+fn check_semicolon(ctx: &LintContext, body: &crate::parser::Block, diagnostics: &mut Vec<Diagnostic>) {
     // Only flag if the body has EXACTLY one statement
     if body.statements.len() == 1 {
         let first = &body.statements[0];

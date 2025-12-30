@@ -2,9 +2,9 @@
 //!
 //! Detects variables that may be used before being assigned a value.
 
-use gml_diagnostics::{Category, Diagnostic, Location};
+use crate::diagnostics::{Category, Diagnostic, Location};
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
-use gml_parser::Stmt;
+use crate::parser::Stmt;
 
 
 pub struct UninitializedVariable;
@@ -26,7 +26,7 @@ impl Rule for UninitializedVariable {
         "Variables must be initialized before use."
     }
 
-    fn check_stmt<'a>(&self, _ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, _stmt: &Stmt<'a>, _diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, _ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, _stmt: &Stmt<'a>, _diagnostics: &mut Vec<Diagnostic>) {
         // We actually check this via bindings in check_expr or post-process?
         // Actually GML001 is often done by checking assignments or references.
         // Let's check implementation.

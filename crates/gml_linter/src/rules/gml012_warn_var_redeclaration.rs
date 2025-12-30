@@ -1,5 +1,5 @@
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::Stmt;
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::Stmt;
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 use rustc_hash::FxHashSet;
 
@@ -22,7 +22,7 @@ impl Rule for WarnVarRedeclaration {
         "Warns when a variable is redeclared in the same scope."
     }
 
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
         if let Stmt::VarDecl { declarations, span: _ } = stmt {
             let mut seen_in_stmt = FxHashSet::default();
             

@@ -1,4 +1,4 @@
-use crate::types::Type;
+use super::types::Type;
 use std::cell::RefCell;
 use rustc_hash::FxHashMap;
 

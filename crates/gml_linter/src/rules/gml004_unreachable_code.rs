@@ -5,8 +5,8 @@
 //! This rule uses the single-pass visitor pattern. When it sees a block-containing
 //! statement, it checks if any code follows a terminator within that block.
 
-use gml_diagnostics::{Category, Diagnostic, Location};
-use gml_parser::{Block, Stmt};
+use crate::diagnostics::{Category, Diagnostic, Location};
+use crate::parser::{Block, Stmt};
 use crate::{LintContext, Rule, RuleCode, SemanticModel};
 
 
@@ -31,7 +31,7 @@ impl Rule for UnreachableCode {
 
     // Note: check() is not overridden - we use check_stmt() for single-pass traversal
     
-    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &gml_semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
+    fn check_stmt<'a>(&self, ctx: &LintContext<'a>, _model: &SemanticModel<'a>, _env: &crate::semantic::scope::TypeEnv, stmt: &Stmt<'a>, diagnostics: &mut Vec<Diagnostic>) {
         // When we encounter a block-containing statement, check its block(s) for unreachable code
         match stmt {
             Stmt::FunctionDecl { body, .. } => {

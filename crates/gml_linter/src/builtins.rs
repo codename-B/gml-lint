@@ -250,6 +250,7 @@ pub fn get_builtins() -> &'static FxHashSet<&'static str> {
         s.insert("string_concat");
         s.insert("string_concat_ext");
         s.insert("string_foreach");
+        s.insert("UnicodeToKrutidev");
         s.insert("clipboard_has_text");
         s.insert("clipboard_set_text");
         s.insert("clipboard_get_text");

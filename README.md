@@ -6,26 +6,30 @@ Inspired by [Ruff](https://github.com/astral-sh/ruff)'s architecture with lint r
 
 ## Performance
 
-⚡ **~110ms cold start** for a 194-file project (1700+ files/sec)
+⚡ **~48ms warm start** (10,000+ files/sec)
+⚡ **~340ms initial scan** (cold cache)
 
-| Phase | Time | % |
+Tested against [Scribble](https://github.com/JujuAdams/Scribble) (500+ files).
+
+| Phase | Time (Warm) | % |
 |-------|------|---|
-| Discovery | ~80ms | 73% |
-| Reading | ~7ms | 6% |
-| Lexing | ~7ms | 6% |
-| Parsing | ~40ms | 37% |
-| Linting | ~55ms | 50% |
+| Discovery | ~7ms | 15% |
+| Reading | ~28ms | 58% |
+| Lexing | ~3ms | 6% |
+| Parsing | ~4ms | 8% |
+| Linting | ~6ms | 13% |
 
 Optimizations include:
-- Parallel file discovery using `jwalk`
-- Parallel file reading and symbol extraction using `rayon`
+- **Memory-mapped file I/O** for fast reading
+- **DashMap** for lock-free concurrent caching
+- **Parallel directory walking** and file processing using `rayon`
 - `FxHashSet` for fast built-in lookups
 - Pre-allocated vectors to minimize reallocations
 - Caching for incremental linting
 
 ## Features
 
-- ⚡️ **Blazing fast** - Sub-120ms cold start for typical projects
+- ⚡️ **Blazing fast** - Sub-50ms warm start for typical projects
 - 🎮 **GML-native** - Built specifically for GameMaker Language, supporting modern 2024+ syntax
 - 🔧 **Auto-fix** - Automatic error correction (e.g., missing semicolons, single equals in conditions)
 - 🔍 **Type Inference** - Deep static analysis to detect type mismatches across scopes
@@ -77,10 +81,19 @@ gml-lint --statistics
 | GML011 | Error | CheckArgumentCounts | Incorrect number of arguments for function |
 | GML012 | Warning | WarnVarRedeclaration | Variable redeclared in same scope |
 | GML013 | Error | UnknownFunction | Use of an undefined global function |
+| GML014 | Error | BreakOutsideLoop | `break` used outside of loop or switch |
+| GML015 | Error | ContinueOutsideLoop | `continue` used outside of loop |
+| GML016 | Error | ReturnOutsideFunction | `return` used outside of callable context |
 | GML017 | Error | ConstructorValidation | Invalid constructor usage |
 | GML020 | Error | TypeMismatch | Detected type mismatch in assignment |
 | GML021 | Error | InvalidAssignment | Assignment to incompatible type |
 | GML022 | Error | UnknownIdentifier | Use of an undefined identifier |
+| GML023 | Error | UninitializedGlobal | Accessing a global variable before initialization |
+| GML024 | Style | SimplifyUndefinedCheck | (Fixable) Use implicit boolean checks for safe types |
+| GML025 | Error | UnsupportedTernary | Unparenthesized nested ternary operator |
+| GML026 | Warning | UncapturedClosureVar | Variable used in closure but not captured |
+| GML027 | Warning | RedundantBooleanComparison | Redundant comparison with boolean literal |
+| GML028 | Warning | EmptyBlock | Empty block statement |
 
 ## License
 

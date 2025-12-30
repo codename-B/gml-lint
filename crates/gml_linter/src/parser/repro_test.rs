@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod reproduction_test {
     use super::*;
-    use crate::ast::*;
+    use super::ast::*;
 
     #[test]
     fn test_parse_struct_simple() {
